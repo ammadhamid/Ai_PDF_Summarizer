@@ -1,3 +1,6 @@
+// ─── Keyword Relevance Search ─────────────────────────────────────────────────
+// TF-based keyword scoring — no vector DB, no embeddings needed.
+
 import { ChunkRecord } from "./memory";
 
 const STOPWORDS = new Set([
@@ -109,17 +112,24 @@ function tokenize(text: string): string[] {
 
 function scoreChunk(chunk: ChunkRecord, queryTerms: string[]): number {
   if (queryTerms.length === 0) return 0;
+
   const chunkLower = chunk.text.toLowerCase();
   const chunkTokens = tokenize(chunk.text);
   const chunkFreq: Record<string, number> = {};
+
   for (const token of chunkTokens) {
     chunkFreq[token] = (chunkFreq[token] || 0) + 1;
   }
+
   let score = 0;
   for (const term of queryTerms) {
+    // Exact token match (weighted heavily)
     if (chunkFreq[term]) score += chunkFreq[term] * 2;
+    // Substring match (handles partial terms)
     if (chunkLower.includes(term)) score += 1;
   }
+
+  // Normalize by chunk length to avoid long-chunk bias
   return score / Math.sqrt(chunk.wordCount);
 }
 
@@ -128,28 +138,38 @@ export interface ScoredChunk {
   score: number;
 }
 
+/**
+ * Returns the topK most relevant chunks for a query.
+ * Always returns results — Groq decides if content is relevant.
+ */
 export function searchChunks(
   query: string,
   chunks: ChunkRecord[],
   topK = 5,
 ): ScoredChunk[] {
   if (chunks.length === 0) return [];
+
   const queryTerms = tokenize(query);
-  const scored: ScoredChunk[] = chunks
+
+  return chunks
     .map((chunk) => ({
       chunk,
       score: queryTerms.length > 0 ? scoreChunk(chunk, queryTerms) : 0,
     }))
-    .sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK);
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
 }
 
+/**
+ * Formats scored chunks into a readable context block for the AI prompt.
+ */
 export function formatContext(scoredChunks: ScoredChunk[]): string {
   if (scoredChunks.length === 0) return "";
+
   return scoredChunks
     .map(
       ({ chunk }, i) =>
-        `--- Context Passage ${i + 1} (from: ${chunk.filename}, chunk #${chunk.index + 1}) ---\n${chunk.text}`,
+        `--- Passage ${i + 1} | File: ${chunk.filename} | Chunk #${chunk.index + 1} ---\n${chunk.text}`,
     )
     .join("\n\n");
 }

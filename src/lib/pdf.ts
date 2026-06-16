@@ -24,11 +24,30 @@ export async function extractTextFromPDF(
 }
 
 function cleanText(raw: string): string {
-  return raw
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/[ \t]{3,}/g, "  ")
-    .replace(/\n{4,}/g, "\n\n\n")
-    .replace(/[^\S\n]{2,}/g, " ")
-    .trim();
+  return (
+    raw
+      // normalize line endings
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+
+      // remove page numbers on separate lines
+      .replace(/^\s*\d+\s*$/gm, "")
+
+      // remove repeated slide numbers before headings
+      .replace(/\n\s*\d+\s+(?=[A-Z])/g, "\n")
+
+      // collapse multiple spaces
+      .replace(/[ \t]+/g, " ")
+
+      // collapse excessive newlines
+      .replace(/\n{3,}/g, "\n\n")
+
+      // remove weird bullet characters
+      .replace(/[❑□▪■◦•]+/g, "\n• ")
+
+      // clean spacing around bullets
+      .replace(/\n\s*•\s*/g, "\n• ")
+
+      .trim()
+  );
 }

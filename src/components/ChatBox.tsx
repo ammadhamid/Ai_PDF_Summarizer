@@ -14,6 +14,7 @@ interface Message {
   content: string;
   sources?: Source[];
   timestamp: string;
+  isError?: boolean;
 }
 
 interface ChatBoxProps {
@@ -28,10 +29,12 @@ export default function ChatBox({ hasDocuments }: ChatBoxProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Auto-scroll to bottom when messages update
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
+  // Auto-resize textarea
   useEffect(() => {
     const ta = textareaRef.current;
     if (ta) {
@@ -43,37 +46,58 @@ export default function ChatBox({ hasDocuments }: ChatBoxProps) {
   const handleSend = async () => {
     const question = input.trim();
     if (!question || isLoading) return;
+
     const userMsg: Message = {
       role: "user",
       content: question,
       timestamp: new Date().toISOString(),
     };
+
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),
       });
+
       const data = await res.json();
+
+      if (!res.ok || data.error) {
+        // Show server error as a red assistant message
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `⚠️ ${data.error || "Server returned an error."}`,
+            timestamp: new Date().toISOString(),
+            isError: true,
+          },
+        ]);
+        return;
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: data.answer || data.error || "No response received.",
+          content: data.answer || "No response received.",
           sources: data.sources,
           timestamp: new Date().toISOString(),
         },
       ]);
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Network error.";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "An error occurred while contacting the server.",
+          content: `⚠️ Could not reach the server: ${message}`,
           timestamp: new Date().toISOString(),
+          isError: true,
         },
       ]);
     } finally {
@@ -100,7 +124,7 @@ export default function ChatBox({ hasDocuments }: ChatBoxProps) {
 
   return (
     <div className="cb-root">
-      {/* Header */}
+      {/* Header — only visible when there are messages */}
       {messages.length > 0 && (
         <div className="cb-header">
           <button
@@ -108,7 +132,7 @@ export default function ChatBox({ hasDocuments }: ChatBoxProps) {
             disabled={isClearing}
             className="cb-clear"
           >
-            {isClearing ? "Clearing…" : "Clear"}
+            {isClearing ? "Clearing…" : "Clear chat"}
           </button>
         </div>
       )}
@@ -117,11 +141,51 @@ export default function ChatBox({ hasDocuments }: ChatBoxProps) {
       <div className="cb-messages">
         {messages.length === 0 && (
           <div className="cb-empty">
-            <p>
-              {hasDocuments
-                ? "Ask anything about your documents"
-                : "Upload PDFs to start chatting"}
-            </p>
+            <div className="cb-empty-inner">
+              {hasDocuments ? (
+                <>
+                  <svg
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ color: "var(--accent)", marginBottom: 10 }}
+                  >
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                  </svg>
+                  <p style={{ color: "var(--text-2)", marginBottom: 4 }}>
+                    Documents loaded — start asking!
+                  </p>
+                  <p style={{ color: "var(--text-3)", fontSize: 11 }}>
+                    Ask anything about your PDFs
+                  </p>
+                </>
+              ) : (
+                <>
+                  <svg
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ color: "var(--text-3)", marginBottom: 10 }}
+                  >
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  <p style={{ color: "var(--text-3)" }}>
+                    Upload PDFs to start chatting
+                  </p>
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -132,6 +196,7 @@ export default function ChatBox({ hasDocuments }: ChatBoxProps) {
             content={msg.content}
             sources={msg.sources}
             timestamp={msg.timestamp}
+            isError={msg.isError}
           />
         ))}
 
@@ -158,8 +223,8 @@ export default function ChatBox({ hasDocuments }: ChatBoxProps) {
           disabled={!hasDocuments || isLoading}
           placeholder={
             hasDocuments
-              ? "Ask a question… (Enter to send)"
-              : "Upload documents first"
+              ? "Ask a question about your documents… (Enter to send)"
+              : "Upload documents first to start chatting"
           }
           rows={1}
           className="cb-input"
@@ -168,6 +233,7 @@ export default function ChatBox({ hasDocuments }: ChatBoxProps) {
           onClick={handleSend}
           disabled={!hasDocuments || isLoading || !input.trim()}
           className="cb-send"
+          title="Send message"
         >
           <svg
             width="15"

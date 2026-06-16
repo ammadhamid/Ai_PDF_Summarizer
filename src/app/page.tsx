@@ -225,7 +225,7 @@ export default function Home() {
           </div>
 
           {/* Content */}
-          <div className="dm-content">
+          <div className="dm-content" style={{minHeight: 0}}>
             {activeTab === "chat" && <ChatBox hasDocuments={hasDocuments} />}
 
             {activeTab === "summaries" && (

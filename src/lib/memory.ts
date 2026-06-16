@@ -1,6 +1,11 @@
 // ─── In-Memory Store ──────────────────────────────────────────────────────────
 // All data lives in RAM for the current server session only.
-// No database, no persistence — refreshing the server clears everything.
+// No database, no persistence — server restart clears everything.
+//
+// Next.js 15 App Router note:
+// Each API route is a separate module instance. Attaching to `globalThis`
+// via a declared global var ensures ONE store is shared across all routes
+// within the same Node.js process, surviving Hot Module Replacement.
 
 export interface DocumentRecord {
   id: string;
@@ -40,13 +45,16 @@ export interface MemoryStore {
   chatHistory: ChatMessage[];
 }
 
-// Singleton in-memory store
+// ─── Process-level singleton ───────────────────────────────────────────────────
+// `declare global` lets TypeScript know about our custom global.
+// This works reliably in Next.js dev mode (HMR-safe) and production.
 declare global {
+  // eslint-disable-next-line no-var
   var __documindStore: MemoryStore | undefined;
 }
 
-if (!global.__documindStore) {
-  global.__documindStore = {
+if (!globalThis.__documindStore) {
+  globalThis.__documindStore = {
     documents: [],
     chunks: [],
     summaries: [],
@@ -54,83 +62,97 @@ if (!global.__documindStore) {
   };
 }
 
-const memoryStore: MemoryStore = global.__documindStore;
+/** Always access through this getter — never cache the reference */
+function store(): MemoryStore {
+  // Re-initialize if somehow wiped (extra safety)
+  if (!globalThis.__documindStore) {
+    globalThis.__documindStore = {
+      documents: [],
+      chunks: [],
+      summaries: [],
+      chatHistory: [],
+    };
+  }
+  return globalThis.__documindStore;
+}
 
 // ─── Document helpers ──────────────────────────────────────────────────────────
 export function addDocument(doc: DocumentRecord): void {
-  memoryStore.documents.push(doc);
+  store().documents.push(doc);
 }
 
 export function getDocuments(): DocumentRecord[] {
-  return memoryStore.documents;
+  return store().documents;
 }
 
 export function getDocumentById(id: string): DocumentRecord | undefined {
-  return memoryStore.documents.find((d) => d.id === id);
+  return store().documents.find((d) => d.id === id);
 }
 
 // ─── Chunk helpers ─────────────────────────────────────────────────────────────
 export function addChunks(chunks: ChunkRecord[]): void {
-  memoryStore.chunks.push(...chunks);
+  store().chunks.push(...chunks);
 }
 
 export function getChunks(): ChunkRecord[] {
-  return memoryStore.chunks;
+  return store().chunks;
 }
 
 export function getChunksByDocumentId(documentId: string): ChunkRecord[] {
-  return memoryStore.chunks.filter((c) => c.documentId === documentId);
+  return store().chunks.filter((c) => c.documentId === documentId);
 }
 
 // ─── Summary helpers ───────────────────────────────────────────────────────────
 export function addSummary(summary: SummaryRecord): void {
-  // Replace if already exists for same document
-  const idx = memoryStore.summaries.findIndex(
-    (s) => s.documentId === summary.documentId,
+  const s = store();
+  const idx = s.summaries.findIndex(
+    (item) => item.documentId === summary.documentId,
   );
   if (idx !== -1) {
-    memoryStore.summaries[idx] = summary;
+    s.summaries[idx] = summary;
   } else {
-    memoryStore.summaries.push(summary);
+    s.summaries.push(summary);
   }
 }
 
 export function getSummaries(): SummaryRecord[] {
-  return memoryStore.summaries;
+  return store().summaries;
 }
 
 export function getSummaryByDocumentId(
   documentId: string,
 ): SummaryRecord | undefined {
-  return memoryStore.summaries.find((s) => s.documentId === documentId);
+  return store().summaries.find((s) => s.documentId === documentId);
 }
 
 // ─── Chat history helpers ──────────────────────────────────────────────────────
 export function addChatMessage(message: ChatMessage): void {
-  memoryStore.chatHistory.push(message);
+  store().chatHistory.push(message);
 }
 
 export function getChatHistory(): ChatMessage[] {
-  return memoryStore.chatHistory;
+  return store().chatHistory;
 }
 
 export function clearChatHistory(): void {
-  memoryStore.chatHistory = [];
+  store().chatHistory = [];
 }
 
-// ─── Reset helpers ─────────────────────────────────────────────────────────────
+// ─── Reset & stats ─────────────────────────────────────────────────────────────
 export function clearAll(): void {
-  memoryStore.documents = [];
-  memoryStore.chunks = [];
-  memoryStore.summaries = [];
-  memoryStore.chatHistory = [];
+  const s = store();
+  s.documents = [];
+  s.chunks = [];
+  s.summaries = [];
+  s.chatHistory = [];
 }
 
 export function getStats() {
+  const s = store();
   return {
-    documentCount: memoryStore.documents.length,
-    chunkCount: memoryStore.chunks.length,
-    summaryCount: memoryStore.summaries.length,
-    chatMessageCount: memoryStore.chatHistory.length,
+    documentCount: s.documents.length,
+    chunkCount: s.chunks.length,
+    summaryCount: s.summaries.length,
+    chatMessageCount: s.chatHistory.length,
   };
 }

@@ -13,6 +13,7 @@ interface MessageBubbleProps {
   content: string;
   sources?: Source[];
   timestamp?: string;
+  isError?: boolean;
 }
 
 export default function MessageBubble({
@@ -20,11 +21,15 @@ export default function MessageBubble({
   content,
   sources,
   timestamp,
+  isError,
 }: MessageBubbleProps) {
   const isUser = role === "user";
+
   return (
     <div className={`mb-row ${isUser ? "user" : "assistant"}`}>
-      <div className={`mb-bubble ${isUser ? "user" : "assistant"}`}>
+      <div
+        className={`mb-bubble ${isUser ? "user" : isError ? "error" : "assistant"}`}
+      >
         {isUser ? (
           <p>{content}</p>
         ) : (
@@ -36,8 +41,9 @@ export default function MessageBubble({
 
       {!isUser && sources && sources.length > 0 && (
         <div className="mb-sources">
+          <span className="mb-sources-label">Sources:</span>
           {sources.map((src, i) => (
-            <span key={i} className="mb-source" title={`Score: ${src.score}`}>
+            <span key={i} className="mb-source" title={`Relevance: ${src.score}`}>
               {src.filename} §{src.chunkIndex + 1}
             </span>
           ))}

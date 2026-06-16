@@ -9,7 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/xai": "^3.0.93",
     "@google/genai": "^0.14.0",
+    "ai": "^6.0.197",
+    "groq-sdk": "^1.2.1",
     "next": "15.1.0",
     "pdf-parse": "^1.1.1",
     "react": "^19.0.0",
