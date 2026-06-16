@@ -171,9 +171,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Upload a te
 
 Built as a semester project for the AI Lab course at Hamdard University.
 
-- Ammad Hamid
-- Ali Nasir
-- Abdullah Babar
+- M. Ammad Hamid
 
 ## License
 
